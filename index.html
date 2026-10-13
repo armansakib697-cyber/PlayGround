@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>STRIKEPOINT — Browser FPS</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23ffb454' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%23ffb454'/%3E%3C/svg%3E" />
+<meta name="description" content="STRIKEPOINT: a wave-based browser first-person shooter built with Three.js. Hold the compound against enemy waves." />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<canvas id="scene" aria-label="STRIKEPOINT 3D viewport"></canvas>
+
+<!-- Damage vignette + heal flash overlays -->
+<div id="damage-vignette" aria-hidden="true"></div>
+<div id="heal-flash" aria-hidden="true"></div>
+
+<!-- HUD -->
+<div id="hud" class="hidden" aria-hidden="true">
+  <div id="crosshair" aria-hidden="true">
+    <span class="ch-dot"></span>
+    <span class="ch-line ch-t"></span><span class="ch-line ch-b"></span>
+    <span class="ch-line ch-l"></span><span class="ch-line ch-r"></span>
+  </div>
+  <div id="hitmarker" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+  <div id="hud-top">
+    <div id="objective"><span class="obj-label">OBJECTIVE</span><span id="objective-text">Hold the compound</span></div>
+    <div id="wave-banner"><span class="wave-label">WAVE</span><span id="wave-num">1</span><span id="enemies-left">0 HOSTILE</span></div>
+    <div id="score-box"><span class="score-label">SCORE</span><span id="score">0</span></div>
+  </div>
+  <div id="hud-bottom-left">
+    <div id="health-wrap">
+      <div class="bar-label"><span>HEALTH</span><span id="health-num">100</span></div>
+      <div class="bar"><div id="health-fill"></div></div>
+    </div>
+    <div id="armor-wrap">
+      <div class="bar-label"><span>ARMOR</span><span id="armor-num">0</span></div>
+      <div class="bar slim"><div id="armor-fill"></div></div>
+    </div>
+  </div>
+  <div id="hud-bottom-right">
+    <div id="ammo-box"><span id="ammo-mag">30</span><span id="ammo-reserve">/ 120</span></div>
+    <div id="weapon-name">AR-7 &ldquo;HORNET&rdquo;</div>
+    <div id="reload-hint" class="hidden">PRESS R TO RELOAD</div>
+  </div>
+  <div id="killfeed" aria-live="polite"></div>
+  <canvas id="minimap" width="148" height="148" aria-label="Minimap"></canvas>
+  <div id="wave-toast" class="hidden"></div>
+  <div id="interact-hint" class="hidden">Hold <b>E</b> to capture</div>
+</div>
+
+<!-- Touch controls -->
+<div id="touch-ui" class="hidden">
+  <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
+  <div id="touch-buttons">
+    <button id="btn-fire" type="button" aria-label="Fire">FIRE</button>
+    <button id="btn-reload" type="button" aria-label="Reload">R</button>
+    <button id="btn-aim" type="button" aria-label="Aim">ADS</button>
+  </div>
+</div>
+
+<!-- Main menu -->
+<div id="menu" class="screen">
+  <div class="menu-card">
+    <p class="kicker">OMGITHUB &bull; THREE.JS FPS</p>
+    <h1>STRIKE<span>POINT</span></h1>
+    <p class="tagline">Hold the compound. <b>8 waves</b>. No respawns for the enemy &mdash; only for your aim.</p>
+    <div class="menu-stats">
+      <div><span>WAVES</span><b>8</b></div>
+      <div><span>BEST</span><b id="menu-best">0</b></div>
+      <div><span>WEAPON</span><b>AR-7</b></div>
+    </div>
+    <button id="btn-start" type="button">Start Game</button>
+    <p class="controls-hint"><b>WASD</b> move &nbsp;&bull;&nbsp; <b>MOUSE</b> look &nbsp;&bull;&nbsp; <b>CLICK</b> fire &nbsp;&bull;&nbsp; <b>R</b> reload &nbsp;&bull;&nbsp; <b>SHIFT</b> sprint &nbsp;&bull;&nbsp; <b>1/2</b> weapons</p>
+    <button id="btn-how" type="button" class="ghost">How to play</button>
+    <div id="how-panel" class="hidden">
+      <ul>
+        <li>Eliminate every hostile each wave. Watch flanks &mdash; bots strafe and push.</li>
+        <li>Headshots deal double damage. Kills drop armor and ammo pickups.</li>
+        <li>Capture the <b>uplink point (A)</b> by standing in the ring for bonus score.</li>
+        <li>Weapon 2 is a high-damage DMR with a smaller magazine.</li>
+      </ul>
+    </div>
+    <div class="menu-row">
+      <label>Sensitivity <input id="opt-sens" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label>
+      <label>Volume <input id="opt-vol" type="range" min="0" max="1" step="0.05" value="0.7" /></label>
+      <label class="check"><input id="opt-shadows" type="checkbox" checked /> Shadows</label>
+    </div>
+  </div>
+</div>
+
+<!-- Pause -->
+<div id="pause" class="screen hidden">
+  <div class="menu-card slim">
+    <h2>PAUSED</h2>
+    <p class="tagline">Pointer unlocked. Catch your breath, operator.</p>
+    <button id="btn-resume" type="button">Resume</button>
+    <button id="btn-restart" type="button" class="ghost">Restart Run</button>
+  </div>
+</div>
+
+<!-- Game over / victory -->
+<div id="end" class="screen hidden">
+  <div class="menu-card slim">
+    <p class="kicker" id="end-kicker">AFTER ACTION REPORT</p>
+    <h2 id="end-title">KIA</h2>
+    <p class="tagline" id="end-sub"></p>
+    <div class="menu-stats">
+      <div><span>SCORE</span><b id="end-score">0</b></div>
+      <div><span>KILLS</span><b id="end-kills">0</b></div>
+      <div><span>WAVE</span><b id="end-wave">1</b></div>
+      <div><span>BEST</span><b id="end-best">0</b></div>
+    </div>
+    <button id="btn-again" type="button">Play Again</button>
+  </div>
+</div>
+
+<div id="boot-error" class="hidden" role="alert"></div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+<script type="module" src="./game.js"></script>
+</body>
+</html>
